@@ -1,18 +1,22 @@
-const DOWNLOAD_ROOT = '/download/';
-
+var foldername = NOW.format('dd.MM.yyyy');
+PATH.mkdir(PATH.public('docs/'+ foldername));
+PATH.mkdir(PATH.public('html/'+ foldername));
+MAIN.foldername = foldername
 
 function extract($) {
     
     var obj =  {};
 
     obj.id = UID();
-    obj.url = $.query.url || '';
-    obj.name = $.query.filename || '';
-    obj.content = $.query.content || '';
-    obj.foldername = $.query.to === 'pdf' ? 'pdf' : 'docs';
-    obj.filename = obj.foldername + '/' + (obj.name || 'document_' + obj.id) + '.docx';
-    obj.path = PATH.public(obj.filename);
-    PATH.mkdir(PATH.public(obj.foldername));
+    obj.url = $.body.url || '';
+    obj.content = $.body.html || '';
+    obj.dpi = $.body.dpi || '';
+    obj.toc = $.body.toc || false;
+    obj.page = $.body.page || 'a4';
+    obj.orientation = $.body.orientation || 'portrait';
+    obj.reference = obj.page + '-' + obj.orientation + '.docx';
+    obj.filename = NOW.format('HH:mm') + 'document_' + obj.id + '.docx';
+    obj.path = PATH.public('docs/' + MAIN.foldername + '/' + obj.filename);
     return obj;
 }
 
@@ -21,103 +25,73 @@ FUNC.fromurl = function($) {
 
     var obj = extract($);
 
-    var command = 'pandoc -f html -t docx -o ' + obj.path + ' ' + obj.url;
-    var hostname = $.controller.hostname();
-    SHELL(command, function(err, ) {
-        if (err)
-            $.success({ success: false, resonse: err });
-        else 
-            $.success( hostname + DOWNLOAD_ROOT + obj.filename);
-        
+    var command = 'pandoc -f html -t docx -o ' + obj.path + ' --reference-doc=' + PATH.public('refs/' + obj.reference);
+
+    obj.toc && (command += ' --toc');
+    obj.dpi && (command += ' --dpi=' + obj.dpi);
+    obj.url && (command += ' ' + obj.url);
+
+
+    console.log('Here object --->', obj);
+
+    return new Promise(function(resolve, reject) {
+        SHELL(command, function(err, response) {
+            if (err) {
+                $.invalid(err);
+                reject();
+            } else 
+                resolve(obj.path);
+        });
     });
 };
 
-// FUNC.fromtext = function($) {
-//     var obj = extract($);
+FUNC.fromhtml = async function($) {
 
+    var obj = extract($);
 
-//     savefile(obj, function(filename) {
+    var command = 'pandoc -f html -t docx -o ' + obj.path + ' --reference-doc=' + PATH.public('refs/' + obj.reference);
 
-//         var command = 'pandoc -f ' + obj.from + ' -t '+ obj.to +' -o ' + obj.path + ' ' + PATH.public(filename);
+    obj.toc && (command += ' --toc');
+    obj.dpi && (command += ' --dpi=' + obj.dpi);
 
-//         SHELL(command, function(err, response) {
-//             console.log(obj);
-//             if (err)
-//                 $.json({ success: false, resonse: err });
-//             else
-//                 $.redirect( DOWNLOAD_ROOT + obj.filename);
-            
-//         });
-//     });
-// };
+    var filename = await savefile(obj, $);
 
+    filename && (command += ' ' + filename);
 
-// FUNC.fromfile = function($) {
+    console.log('Here object --->', obj);
 
-//     var obj = extract($);
-//     var file = $.files[0];
-//     savefile(file, obj, function(meta) {
-
-//         var command = 'pandoc -f ' + obj.from + ' -t '+ obj.to +' -o ' + obj.path + ' ' + PATH.public(meta.filename);
-
-//         SHELL(command, function(err, response) {
-//             console.log(obj);
-//             if (err)
-//                 $.json({ success: false, resonse: err });
-//             else
-//                 $.redirect( DOWNLOAD_ROOT + obj.filename);
-            
-//         });
-//     });
-
-
-// };
-
-
-
-var savefile = async function (file, opt, callback) {
-    PATH.mkdir(PATH.public(opt.foldername));
-
-    if (callback === undefined) {
-        callback = opt;
-        opt = file;
-        file = null;
-    }
-
-
-    if (file && typeof(file) === 'object') {
-        
-        F.Fs.readFile(file.path, function(err, bin) {
-            console.log(file);
-            var filename = PATH.public(opt.foldername + '/' + U.getName(file.path).split('.')[0] + '.' + U.getExtension(file.filename));
-            F.Fs.writeFile(filename, bin, function(err, res){
-                callback({ filename: filename });
-            });
+    return new Promise(function(resolve, reject) {
+        SHELL(command, function(err, response) {
+            if (err) {
+                $.invalid(err);
+                reject();
+            } else 
+                resolve(obj.path);
         });
-
-    } else {
-
-        var obj = {};
-        obj.id = UID();
-        obj.filename = opt.foldername + '/' + (opt.name || 'document') + '_' + obj.id  + '.' + opt.to;
-        obj.path = PATH.public(obj.filename);
-        
-        if (!opt.content && opt.url) {
-            obj.filename2 = opt.foldername + '/' + (opt.name || 'document') + '_' + obj.id  + '.' + opt.from;
-            obj.path2 = PATH.public(obj.filename2);
-
-            console.log(opt);
-            RESTBuilder.GET(opt.url).callback(function(err, response, output) {
-                F.Fs.writeFile(obj.path2, output.response, function(err, res){
-                    callback(obj);
-                });
-            });
-        } else {
-            F.Fs.writeFile(obj.path, opt.content, function(err, res){
-                callback(obj);
-            });
-        }
-
-        
-    }
+    });
 };
+
+
+var savefile = function (opt, $) {
+    return new Promise(function(resolve, reject) {
+        var file = PATH.public('html/' + MAIN.foldername + '/' + opt.filename.replace('.docx', '.html'));
+        F.Fs.writeFile(file, opt.content, function(err){
+            if (err) {
+                $.invalid(err);
+                reject();
+            } else 
+                resolve(file);
+        });
+    });
+
+};
+
+
+ON('service', function() {
+    if (NOW.format('HH:mm') === '00:00') {
+        var foldername = NOW.format('dd.MM.yyyy');
+        PATH.mkdir(PATH.public('docs/'+ foldername));
+        PATH.mkdir(PATH.public('html/'+ foldername));
+        MAIN.foldername = foldername
+    }
+});
