@@ -7,7 +7,7 @@ NEWSCHEMA('Converter', function(schema) {
     schema.define('dpi', 'Number');
     schema.define('toc', 'Boolean');
     schema.define('orientation', ['portrait', 'landscape']);
-    schema.define('page', ['a3', 'a4', 'a5', 'letter']);
+    schema.define('page', ['A3', 'A4', 'A5', 'Letter']);
 
     schema.action('exec', {
         name: 'Convert html to docx documents',

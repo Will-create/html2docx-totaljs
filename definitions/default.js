@@ -6,13 +6,13 @@ MAIN.foldername = foldername
 function extract($) {
     
     var obj =  {};
-
+    
     obj.id = UID();
     obj.url = $.body.url || '';
     obj.content = $.body.html || '';
     obj.dpi = $.body.dpi || '';
     obj.toc = $.body.toc || false;
-    obj.page = $.body.page || 'a4';
+    obj.page = ($.body.page || 'a4').toLowerCase();
     obj.orientation = $.body.orientation || 'portrait';
     obj.reference = obj.page + '-' + obj.orientation + '.docx';
     obj.filename = NOW.format('HH:mm') + 'document_' + obj.id + '.docx';
